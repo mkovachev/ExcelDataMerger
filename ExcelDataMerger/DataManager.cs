@@ -2,12 +2,12 @@
 
 namespace ExcelDataMerger
 {
-    public class MergerManager
+    public class DataManager
     {
         private readonly string folderPath;
         private readonly int animalTypeColumnIndex;
 
-        public MergerManager(string folderPath, int animalTypeColumnIndex)
+        public DataManager(string folderPath, int animalTypeColumnIndex)
         {
             this.folderPath = folderPath;
             this.animalTypeColumnIndex = animalTypeColumnIndex;
