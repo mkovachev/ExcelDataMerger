@@ -1,82 +1,96 @@
-﻿using OfficeOpenXml;
+﻿
+using OfficeOpenXml;
 
-namespace ExcelDataMerger
+public class DataManager
 {
-    public class DataManager
+    public void RetrieveScientificNamesAndValues(string sourceFolderPath)
     {
-        private readonly string folderPath;
-        private readonly int animalTypeColumnIndex;
+        ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
 
-        public DataManager(string folderPath, int animalTypeColumnIndex)
+        DirectoryInfo sourceDirectory = new DirectoryInfo(sourceFolderPath);
+        FileInfo[] sourceFiles = sourceDirectory.GetFiles("*.xlsx");
+
+        Dictionary<string, List<string>> scientificNameValues = new Dictionary<string, List<string>>();
+
+        foreach (FileInfo sourceFile in sourceFiles)
         {
-            this.folderPath = folderPath;
-            this.animalTypeColumnIndex = animalTypeColumnIndex;
-        }
-
-        public void MergeFiles(string outputFilePath)
-        {
-            var fileNames = Directory.GetFiles(folderPath, "*.xlsx");
-
-            if (fileNames.Length == 0)
+            using (ExcelPackage sourcePackage = new ExcelPackage(sourceFile))
             {
-                Console.WriteLine("No Excel files found in the specified folder.");
-                return;
-            }
+                ExcelWorksheet sourceWorksheet = sourcePackage.Workbook.Worksheets.FirstOrDefault();
 
-            var animalTypes = new List<string>();
-            var mergedData = new List<Animal>();
-
-            foreach (string fileName in fileNames)
-            {
-                FileInfo fileInfo = new(fileName);
-
-                using ExcelPackage package = new(fileInfo);
-                ExcelWorksheet worksheet = package.Workbook.Worksheets[1];
-
-                int lastRow = worksheet.Dimension.End.Row;
-
-                for (int row = 2; row <= lastRow; row++)
+                if (sourceWorksheet != null)
                 {
-                    string? animalType = worksheet.Cells[row, animalTypeColumnIndex]?.Value?.ToString();
+                    int rowCount = sourceWorksheet.Dimension?.Rows ?? 0;
+                    int scientificNameColumnIndex = GetScientificNameColumnIndex(sourceWorksheet, "Scientific Name");
+                    int valueColumnIndex = GetColumnIndexByName(sourceWorksheet, "T");
 
-                    if (!string.IsNullOrEmpty(animalType))
+                    for (int rowIndex = 3; rowIndex <= rowCount; rowIndex++)
                     {
-                        if (!animalTypes.Contains(animalType))
+                        string scientificName = sourceWorksheet.Cells[rowIndex, scientificNameColumnIndex]?.Value?.ToString();
+                        string value = sourceWorksheet.Cells[rowIndex, valueColumnIndex]?.Value?.ToString();
+
+                        if (!string.IsNullOrEmpty(scientificName) && !string.IsNullOrEmpty(value))
                         {
-                            animalTypes.Add(animalType);
+                            if (!scientificNameValues.ContainsKey(scientificName))
+                            {
+                                scientificNameValues.Add(scientificName, new List<string>());
+                            }
+
+                            scientificNameValues[scientificName].Add(value);
                         }
-
-                        var animal = new Animal()
-                        {
-                            Type = animalType,
-                            Name = worksheet.Cells[row, 1]?.Value?.ToString(),
-                            Age = Convert.ToInt32(worksheet.Cells[row, 2]?.Value)
-                        };
-
-                        mergedData.Add(animal);
                     }
                 }
             }
+        }
 
-            using ExcelPackage mergedPackage = new();
-            ExcelWorksheet mergedWorksheet = mergedPackage.Workbook.Worksheets.Add("Merged Data");
+        foreach (var entry in scientificNameValues)
+        {
+            string name = entry.Key;
+            List<string> values = entry.Value;
 
-            mergedWorksheet.Cells[1, 1].Value = "Animal Type";
-            mergedWorksheet.Cells[1, 2].Value = "Name";
-            mergedWorksheet.Cells[1, 3].Value = "Age";
-
-            var currentRow = 2;
-
-            foreach (Animal animalData in mergedData)
-            {
-                mergedWorksheet.Cells[currentRow, 1].Value = animalData.Type;
-                mergedWorksheet.Cells[currentRow, 2].Value = animalData.Name;
-                mergedWorksheet.Cells[currentRow, 3].Value = animalData.Age;
-
-                currentRow++;
-            }
-
-            mergedPackage.SaveAs(new FileInfo(outputFilePath));
+            string valuesString = string.Join(",", values);
+            Console.WriteLine($"{name}: {valuesString}");
         }
     }
+
+    private int GetScientificNameColumnIndex(ExcelWorksheet worksheet, string columnName)
+    {
+        int columnIndex = -1;
+
+        int headerRow = 1; // Assuming the header row is the first row
+
+        for (int column = 1; column <= worksheet.Dimension.Columns; column++)
+        {
+            var cellValue = worksheet.Cells[headerRow, column].Value?.ToString();
+
+            if (cellValue != null && cellValue.Equals(columnName, StringComparison.OrdinalIgnoreCase))
+            {
+                columnIndex = column;
+                break;
+            }
+        }
+
+        return columnIndex;
+    }
+
+    private int GetColumnIndexByName(ExcelWorksheet worksheet, string columnName)
+    {
+        int columnIndex = -1;
+
+        int headerRow = 1; // Assuming the header row is the first row
+
+        for (int column = 1; column <= worksheet.Dimension.Columns; column++)
+        {
+            var cellValue = worksheet.Cells[headerRow, column].Value?.ToString();
+
+            if (cellValue != null && cellValue.Equals(columnName, StringComparison.OrdinalIgnoreCase))
+            {
+                columnIndex = column;
+                break;
+            }
+        }
+
+        return columnIndex;
+    }
+
 }
