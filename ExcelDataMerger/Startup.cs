@@ -1,22 +1,18 @@
-﻿string sourceFiles = @"C:\Users\nc\Documents\NKB\source";
-string dataFiles = @"C:\Users\nc\Documents\NKB\destination";
+﻿public class Program
+{
+    public static void Main()
+    {
+        string sourceFolderPath = @"C:\Users\nc\Documents\NKB\source";
+        string destinationFilePath = @"C:\Users\nc\Documents\NKB\destination";
 
+        string sourceNames = "Scientific Name";
+        string sourceValues = "T";
+        string destinationNames = "Species LATIN AND ENG";
+        string destinationValues = "Type of presence";
 
-var sourceColumnNames = "Scientific Name";
-var sourceColumnValues = "T";
-var destinationColumnNames = "Species LATIN AND ENG";
-var destinationColumnValues = "Type of presence";
+        var xssfManager = new XSSFManager();
+        xssfManager.UpdateTypeOfPresence(sourceFolderPath, destinationFilePath, sourceNames, sourceValues, destinationNames, destinationValues);
 
-var npoiManager = new NPOIManager();
-var epplusManager = new EPPlusManager();
-var xssfManager = new EPPlusManager();
-
-xssfManager.GetNamesWithValues(sourceFiles, sourceColumnNames, sourceColumnValues);
-
-Console.WriteLine("--------------------------------------------");
-
-//epplusManager.GetNamesWithValues(dataFiles, destinationColumnNames, destinationColumnValues);
-//npoiManager.GetNamesWithValues(dataFiles, destinationColumnNames, destinationColumnValues);
-xssfManager.GetNamesWithValues(dataFiles, destinationColumnNames, destinationColumnValues);
-
-Console.WriteLine("Excel file updated successfully.");
+        Console.WriteLine("Excel file updated successfully.");
+    }
+}

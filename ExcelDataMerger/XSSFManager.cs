@@ -3,27 +3,26 @@ using NPOI.XSSF.UserModel;
 
 public class XSSFManager
 {
-    public void GetNamesWithValues(string sourceFolderPath, string columnNames, string columnsValues)
+    private Dictionary<string, List<string>> GetSourceData(string sourceFolderPath, string sourceNames, string sourceValues)
     {
-        DirectoryInfo directory = new DirectoryInfo(sourceFolderPath);
-        FileInfo[] files = directory.GetFiles("*.xlsx");
+        var sourceFiles = Directory.GetFiles(sourceFolderPath, "*.xlsx");
 
         Dictionary<string, List<string>> names = new Dictionary<string, List<string>>();
 
-        foreach (FileInfo file in files)
+        foreach (var file in sourceFiles)
         {
-            using (FileStream stream = new FileStream(file.FullName, FileMode.Open, FileAccess.Read))
+            using (var stream = new FileStream(file, FileMode.Open, FileAccess.Read))
             {
-                IWorkbook workbook = new XSSFWorkbook(stream);
-                ISheet sheet = workbook.GetSheetAt(0); // Assuming data is in the first sheet
+                var workbook = new XSSFWorkbook(stream);
+                var sheet = workbook.GetSheetAt(0); // Assuming data is in the first sheet
 
                 int rowCount = sheet.LastRowNum + 1;
-                int namesColumnIndex = GetIndexByColumnName(sheet, columnNames);
-                int valuesColumnIndex = GetIndexByColumnName(sheet, columnsValues);
+                int namesColumnIndex = GetIndexByColumnName(sheet, sourceNames);
+                int valuesColumnIndex = GetIndexByColumnName(sheet, sourceValues);
 
                 for (int rowIndex = 1; rowIndex < rowCount; rowIndex++)
                 {
-                    IRow row = sheet.GetRow(rowIndex);
+                    var row = sheet.GetRow(rowIndex);
                     if (row != null)
                     {
                         string? name = row.GetCell(namesColumnIndex)?.ToString();
@@ -43,28 +42,21 @@ public class XSSFManager
             }
         }
 
-        foreach (var entry in names)
-        {
-            string name = entry.Key;
-            List<string> values = entry.Value;
-
-            string valuesString = string.Join(",", values);
-            Console.WriteLine($"{name}: {valuesString}");
-        }
+        return names;
     }
 
     private int GetIndexByColumnName(ISheet sheet, string columnName)
     {
-        var formattedColumnName = columnName.ToLower().Trim();
+        var formattedName = columnName.ToLower().Trim();
 
         int columnIndex = -1;
-        IRow headerRow = sheet.GetRow(0);
+        var headerRow = sheet.GetRow(0);
 
         for (int column = 0; column < headerRow.LastCellNum; column++)
         {
-            string? cellValue = headerRow.GetCell(column)?.ToString()?.ToLower()?.Trim();
+            var cellValue = headerRow.GetCell(column)?.ToString()?.ToLower()?.Trim();
 
-            if (!string.IsNullOrEmpty(cellValue) && cellValue.Replace("\n", " ").Equals(formattedColumnName, StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrEmpty(cellValue) && cellValue.Replace("\n", " ").Equals(formattedName, StringComparison.OrdinalIgnoreCase))
             {
                 columnIndex = column;
                 break;
@@ -72,5 +64,70 @@ public class XSSFManager
         }
 
         return columnIndex;
+    }
+
+    public void UpdateTypeOfPresence(string sourceFolderPath, string destinationFolderPath, string sourceNames, string sourceValues, string destinationNames, string destinationValues)
+    {
+        var sourceData = GetSourceData(sourceFolderPath, sourceNames, sourceValues);
+
+        var destinationDirectory = new DirectoryInfo(destinationFolderPath);
+        var destinationFiles = destinationDirectory.GetFiles("*.xlsx");
+
+        foreach (var destinationFile in destinationFiles)
+        {
+            if (destinationFile.Name.StartsWith("~$"))
+                continue;
+
+            using (var stream = new FileStream(destinationFile.FullName, FileMode.Open, FileAccess.ReadWrite))
+            {
+                var workbook = new XSSFWorkbook(stream);
+                var sheet = workbook.GetSheetAt(0); // Assuming data is in the first sheet
+
+                int rowCount = sheet.LastRowNum + 1;
+                int destinationNameIndex = GetIndexByColumnName(sheet, destinationNames);
+                int destinationValueIndex = GetIndexByColumnName(sheet, destinationValues);
+
+                for (int rowIndex = 1; rowIndex < rowCount; rowIndex++)
+                {
+                    var row = sheet.GetRow(rowIndex);
+                    if (row != null)
+                    {
+                        string? name = row.GetCell(destinationNameIndex)?.ToString();
+
+                        string shortName = string.Empty;
+                        if (name is not null)
+                        {
+                            string[]? nameParts = name?.Split(' ');
+                            if (nameParts.Length > 1)
+                            {
+                                shortName = $"{nameParts?[0]} {nameParts?[1]}".Trim();
+                            }
+                            else
+                            {
+                                shortName = nameParts[0].Trim();
+                            }
+                        }
+                        else
+                        {
+                            shortName = string.Empty;
+                        }
+
+                        // TODO: 
+                        if (!string.IsNullOrEmpty(shortName) && sourceData.Keys.Any(key => key.Equals(shortName, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            var values = sourceData[shortName];
+                            string valuesString = string.Join(",", values);
+
+                            row.GetCell(destinationNameIndex)?.SetCellValue(valuesString);
+                        }
+                    }
+                }
+
+                using (var writeStream = new FileStream(destinationFile.FullName, FileMode.Create, FileAccess.Write))
+                {
+                    workbook.Write(writeStream);
+                }
+            }
+        }
     }
 }

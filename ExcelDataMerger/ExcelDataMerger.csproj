@@ -10,6 +10,7 @@
   <ItemGroup>
     <PackageReference Include="EPPlus" Version="6.2.6" />
     <PackageReference Include="NPOI" Version="2.6.0" />
+    <PackageReference Include="System.IO.FileSystem" Version="4.3.0" />
   </ItemGroup>
 
 </Project>
