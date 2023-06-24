@@ -4,6 +4,12 @@ using System.Text.RegularExpressions;
 
 public class NPOIManager
 {
+    private readonly LogManager logManager;
+
+    public NPOIManager(LogManager logManager)
+    {
+        this.logManager = logManager;
+    }
     public void UpdateSiteAssessmentColumn(string sourceFolderPath, string destinationFolderPath, string sourceNames, string sourceCon, string sourceGlo, string destinationSpecies, string destinationSiteAssessmentValues)
     {
         try
@@ -23,6 +29,8 @@ public class NPOIManager
                     if (destinationFile.Name.StartsWith("~$"))
                         continue;
 
+                    int updatedValuesCount = 0;
+
                     using (var stream = new FileStream(destinationFile.FullName, FileMode.Open, FileAccess.ReadWrite))
                     {
                         var workbook = new XSSFWorkbook(stream);
@@ -31,8 +39,6 @@ public class NPOIManager
                         int rowCount = sheet.LastRowNum + 1;
                         int namesColumnIndex = GetIndexByFirstColumnName(sheet, destinationSpecies);
                         int siteAssessmentColumnIndex = GetIndexByFirstColumnName(sheet, destinationSiteAssessmentValues);
-
-                        int updatedValuesCount = 0;
 
                         for (int rowIndex = 1; rowIndex < rowCount; rowIndex++)
                         {
@@ -47,30 +53,31 @@ public class NPOIManager
                                     if (!string.IsNullOrEmpty(shortName) && sourceData.ContainsKey(shortName))
                                     {
                                         var values = sourceData[shortName];
-                                        string valuesString = string.Join(" / ", values);
+                                        string conValuesString = string.Join(",", values["con"].Distinct());
+                                        string gloValuesString = string.Join(",", values["glo"].Distinct());
 
                                         var siteAssessmentCell = row.GetCell(siteAssessmentColumnIndex);
                                         if (siteAssessmentCell == null)
                                             siteAssessmentCell = row.CreateCell(siteAssessmentColumnIndex, CellType.String);
-                                        siteAssessmentCell.SetCellValue(valuesString);
+                                        siteAssessmentCell.SetCellValue($"{conValuesString} / {gloValuesString}");
 
-                                        Console.WriteLine($"Updated value for name '{name}': {valuesString}");
+                                        logManager.Log($"{name}: {conValuesString} / {gloValuesString}");
                                         updatedValuesCount++;
+                                        totalUpdatedValues++;
                                     }
                                 }
                             }
                             catch (Exception ex)
                             {
-                                Console.WriteLine($"Error updating row {rowIndex + 1} in file '{destinationFile.Name}': {ex.Message}");
+                                logManager.Log($"Error updating row {rowIndex + 1} in file '{destinationFile.Name}': {ex.Message}");
                             }
                         }
 
                         if (updatedValuesCount > 0)
                         {
-                            totalUpdatedValues += updatedValuesCount;
                             totalUpdatedFiles++;
-                            Console.WriteLine($"Total updated values in file '{destinationFile.Name}': {updatedValuesCount}");
-                            Console.WriteLine();
+                            logManager.Log($"{destinationFile.Name}: {updatedValuesCount}");
+
                         }
 
                         using (var writeStream = new FileStream(destinationFile.FullName, FileMode.Create, FileAccess.Write))
@@ -81,26 +88,27 @@ public class NPOIManager
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error processing file '{destinationFile.Name}': {ex.Message}");
+                    logManager.Log($"Error processing file '{destinationFile.Name}': {ex.Message}");
                 }
             }
 
-            Console.WriteLine("Update Site Assessment Column Summary:");
-            Console.WriteLine($"Total updated values across all files: {totalUpdatedValues}");
-            Console.WriteLine($"Total files with updated values: {totalUpdatedFiles}");
+            logManager.Log($"Total files updated: {totalUpdatedFiles}");
+            logManager.Log("----------------------------------------------------------------");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"An error occurred during the site assessment column update process: {ex.Message}");
+            logManager.Log($"An error occurred during the site assessment column update process: {ex.Message}");
         }
     }
 
-    private Dictionary<string, List<string>> GetSecondSourceData(string sourceFolderPath, string sourceNames, string sourceCon, string sourceGlo)
+
+
+    private Dictionary<string, Dictionary<string, List<string>>> GetSecondSourceData(string sourceFolderPath, string sourceNames, string sourceCon, string sourceGlo)
     {
         var sourceDirectory = new DirectoryInfo(sourceFolderPath);
         var sourceFiles = sourceDirectory.GetFiles("*.xlsx");
 
-        var names = new Dictionary<string, List<string>>(StringComparer.CurrentCultureIgnoreCase);
+        var names = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.CurrentCultureIgnoreCase);
 
         foreach (var file in sourceFiles)
         {
@@ -133,28 +141,38 @@ public class NPOIManager
                                 if (!string.IsNullOrEmpty(name) && (!string.IsNullOrEmpty(conValue) || !string.IsNullOrEmpty(gloValue)))
                                 {
                                     if (!names.ContainsKey(name))
-                                        names.Add(name, new List<string>());
+                                        names.Add(name, new Dictionary<string, List<string>>());
 
-                                    string valueString = string.IsNullOrEmpty(conValue) ? gloValue : conValue;
-                                    names[name].Add(valueString);
+                                    if (!names[name].ContainsKey("con"))
+                                        names[name].Add("con", new List<string>());
+
+                                    if (!names[name].ContainsKey("glo"))
+                                        names[name].Add("glo", new List<string>());
+
+                                    if (!string.IsNullOrEmpty(conValue))
+                                        names[name]["con"].Add(conValue);
+
+                                    if (!string.IsNullOrEmpty(gloValue))
+                                        names[name]["glo"].Add(gloValue);
                                 }
                             }
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"Error reading row {rowIndex + 1} in file '{file.Name}': {ex.Message}");
+                            logManager.Log($"Error reading row {rowIndex + 1} in file '{file.Name}': {ex.Message}");
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error processing file '{file.Name}': {ex.Message}");
+                logManager.Log($"Error processing file '{file.Name}': {ex.Message}");
             }
         }
 
         return names;
     }
+
 
     private int GetIndexBySecondColumnName(ISheet sheet, string columnName)
     {
@@ -220,21 +238,21 @@ public class NPOIManager
                                     if (!string.IsNullOrEmpty(shortName) && sourceData.ContainsKey(shortName))
                                     {
                                         var values = sourceData[shortName];
-                                        string valuesString = string.Join(",", values);
+                                        string valuesString = string.Join(",", values.Distinct());
 
                                         var valueCell = row.GetCell(valueColumnIndex);
                                         if (valueCell == null)
                                             valueCell = row.CreateCell(valueColumnIndex, CellType.String);
                                         valueCell.SetCellValue(valuesString);
 
-                                        Console.WriteLine($"Updated value for name '{name}': {valuesString}");
+                                        logManager.Log($"{name}: {valuesString}");
                                         updatedNamesCount++;
                                     }
                                 }
                             }
                             catch (Exception ex)
                             {
-                                Console.WriteLine($"Error updating row {rowIndex + 1} in file '{destinationFile.Name}': {ex.Message}");
+                                logManager.Log($"Error updating row {rowIndex + 1} in file '{destinationFile.Name}': {ex.Message}");
                             }
                         }
 
@@ -242,8 +260,7 @@ public class NPOIManager
                         {
                             totalUpdatedNames += updatedNamesCount;
                             totalUpdatedFiles++;
-                            Console.WriteLine($"Total updated names in file '{destinationFile.Name}': {updatedNamesCount}");
-                            Console.WriteLine();
+                            logManager.Log($"{destinationFile.Name}: {updatedNamesCount}");
                         }
 
                         using (var writeStream = new FileStream(destinationFile.FullName, FileMode.Create, FileAccess.Write))
@@ -254,17 +271,18 @@ public class NPOIManager
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error processing file '{destinationFile.Name}': {ex.Message}");
+                    logManager.Log($"Error processing file '{destinationFile.Name}': {ex.Message}");
                 }
             }
 
-            Console.WriteLine("Update Columns Summary:");
-            Console.WriteLine($"Total updated names across all files: {totalUpdatedNames}");
-            Console.WriteLine($"Total files with updated names: {totalUpdatedFiles}");
+            logManager.Log("Type of presence Summary:");
+            logManager.Log($"Total names updated per file: {totalUpdatedNames}");
+            logManager.Log($"Total files updated: {totalUpdatedFiles}");
+            logManager.Log("----------------------------------------------------------------");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"An error occurred during the column update process: {ex.Message}");
+            logManager.Log($"An error occurred during the column update process: {ex.Message}");
         }
     }
 
@@ -312,14 +330,14 @@ public class NPOIManager
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"Error reading row {rowIndex + 1} in file '{file.Name}': {ex.Message}");
+                            logManager.Log($"Error reading row {rowIndex + 1} in file '{file.Name}': {ex.Message}");
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error processing file '{file.Name}': {ex.Message}");
+                logManager.Log($"Error processing file '{file.Name}': {ex.Message}");
             }
         }
 

@@ -10,6 +10,13 @@ public class ColumnManager
     private List<string>? addedColumns;
     private List<string>? existingColumns;
 
+    private readonly LogManager logManager;
+
+    public ColumnManager(LogManager logManager)
+    {
+        this.logManager = logManager;
+    }
+
     public void LoadExcelFile(FileInfo filePath)
     {
         ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
@@ -96,35 +103,36 @@ public class ColumnManager
 
     public void PrintSummary(int totalFilesProcessed, int filesWithAddedColumns, int filesWithExistingColumns)
     {
-        Console.WriteLine("Summary:");
-        Console.WriteLine($"Total files processed: {totalFilesProcessed}");
-        Console.WriteLine($"Total files with added columns: {filesWithAddedColumns}");
-        Console.WriteLine($"Total files with existing columns: {filesWithExistingColumns}");
+        logManager.Log("Create column summary:");
+        logManager.Log($"Total files processed: {totalFilesProcessed}");
+        logManager.Log($"Total files with added columns: {filesWithAddedColumns}");
+        logManager.Log($"Total files with existing columns: {filesWithExistingColumns}");
+        logManager.Log("----------------------------------------------------------------");
     }
 
     public void PrintFileSummary(string processedFile)
     {
-        Console.WriteLine($"Processed file: {processedFile}");
+        logManager.Log($"Processed file: {processedFile}");
 
         if (addedColumns.Count > 0)
         {
-            Console.WriteLine("Columns added:");
+            logManager.Log("Columns added:");
             foreach (string columnName in addedColumns)
             {
-                Console.WriteLine(columnName);
+                logManager.Log(columnName);
             }
         }
 
         if (existingColumns.Count > 0)
         {
-            Console.WriteLine("Columns already present:");
+            logManager.Log("Columns already present:");
             foreach (string columnName in existingColumns)
             {
-                Console.WriteLine(columnName);
+                logManager.Log(columnName);
             }
         }
 
-        Console.WriteLine();
+        logManager.Log("----------------------------------------------------------------");
     }
 
     public int ColumnsAdded => columnsAdded;
