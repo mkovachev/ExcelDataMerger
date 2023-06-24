@@ -10,14 +10,14 @@ public class ColumnManager
     private List<string>? addedColumns;
     private List<string>? existingColumns;
 
-    public void LoadExcelFile(string filePath)
+    public void LoadExcelFile(FileInfo filePath)
     {
         ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-        package = new ExcelPackage(new FileInfo(filePath));
-        worksheet = package.Workbook.Worksheets[0];
+        package = new ExcelPackage(filePath);
+        worksheet = package.Workbook.Worksheets.FirstOrDefault();
     }
 
-    public void CreateColumns(List<Column> columns)
+    public void CreateColumns(List<Column> columns, string destinationNames, string destinationColumn)
     {
         addedColumns = new List<string>();
         existingColumns = new List<string>();
@@ -36,6 +36,8 @@ public class ColumnManager
             }
         }
 
+        ///MergeCellsInNewColumns(destinationNames, destinationColumn);
+
         package?.Save();
     }
 
@@ -53,7 +55,12 @@ public class ColumnManager
                 worksheet?.InsertColumn(column.Index, 1);
             }
 
+            // Copy formatting from the adjacent cell in the header row
+            int adjacentColumnIndex = column.Index - 1;
+            var adjacentCell = worksheet.Cells[1, adjacentColumnIndex];
             worksheet.Cells[1, column.Index].Value = column.Name;
+            worksheet.Cells[1, column.Index].StyleID = adjacentCell.StyleID;
+
             return true;
         }
         else
@@ -70,7 +77,7 @@ public class ColumnManager
         {
             string? cellValue = worksheet?.Cells[1, columnIndex]?.Value?.ToString();
 
-            if (!string.IsNullOrEmpty(cellValue) && cellValue.Equals(columnName, StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrEmpty(cellValue) && cellValue.Replace("\n", " ").Equals(columnName, StringComparison.OrdinalIgnoreCase))
             {
                 return columnIndex;
             }

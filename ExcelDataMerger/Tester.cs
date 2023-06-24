@@ -3,13 +3,12 @@ using System.Text.RegularExpressions;
 
 namespace ExcelDataMerger
 {
-    public class EPPlusManager
+    public class Tester
     {
         public void UpdateColumns(string sourceFolderPath, string destinationFolderPath, string sourceNames, string sourceValues, string destinationNames, string destinationValues)
         {
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
 
-            var sourceData = GetSourceData(sourceFolderPath, sourceNames, sourceValues);
             var destinationDirectory = new DirectoryInfo(destinationFolderPath);
             var destinationFiles = destinationDirectory.GetFiles("*.xlsx")
                 .Where(file => !file.Name.StartsWith("~"))
@@ -30,11 +29,9 @@ namespace ExcelDataMerger
                         string? name = nameCell.Value?.ToString();
                         string? shortName = Regex.Match(name ?? "", @"^(.*?)\s*\(")?.Groups[1]?.Value.Trim();
 
-                        if (!string.IsNullOrEmpty(shortName) && sourceData.ContainsKey(shortName))
+                        if (!string.IsNullOrEmpty(shortName))
                         {
-                            var values = sourceData[shortName];
-                            string valuesString = string.Join(",", values);
-
+                            string valuesString = GetSourceValues(sourceFolderPath, sourceNames, sourceValues, shortName);
                             var valueCell = worksheet.Cells[rowIndex, destinationValueIndex];
                             valueCell.Value = valuesString;
                         }
@@ -45,13 +42,9 @@ namespace ExcelDataMerger
             }
         }
 
-        private Dictionary<string, List<string>> GetSourceData(string sourceFolderPath, string sourceNames, string sourceValues)
+        private string GetSourceValues(string sourceFolderPath, string sourceNames, string sourceValues, string shortName)
         {
-            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-
             var sourceFiles = Directory.GetFiles(sourceFolderPath, "*.xlsx");
-
-            var sourceData = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var file in sourceFiles)
             {
@@ -70,20 +63,26 @@ namespace ExcelDataMerger
                         string? name = nameCell.Value?.ToString();
                         string? value = valueCell.Value?.ToString();
 
+                        if (name == "Gavia stellata")
+                        {
+
+                        }
+
                         if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(value))
                         {
-                            if (!sourceData.ContainsKey(name))
-                            {
-                                sourceData[name] = new List<string>();
-                            }
+                            string normalizedShortName = Regex.Replace(shortName, @"[^a-zA-Z0-9]", "");
+                            string normalizedComparisonString = Regex.Replace("Gavia stellata", @"[^a-zA-Z0-9]", "");
 
-                            sourceData[name].Add(value);
+                            if (name.Equals(shortName, StringComparison.CurrentCultureIgnoreCase))
+                            {
+                                return value;
+                            }
                         }
                     }
                 }
             }
 
-            return sourceData;
+            return string.Empty;
         }
 
         private int GetColumnIndexByColumnName(ExcelWorksheet worksheet, string columnName)
@@ -94,7 +93,7 @@ namespace ExcelDataMerger
 
             for (int columnIndex = 1; columnIndex <= columnCount; columnIndex++)
             {
-                var cellValue = worksheet.Cells[1, columnIndex].Value?.ToString()?.ToLower()?.Trim(); ;
+                var cellValue = worksheet.Cells[1, columnIndex].Value?.ToString()?.ToLower()?.Trim();
                 if (!string.IsNullOrEmpty(cellValue) && cellValue.Replace("\n", " ").Equals(formattedName, StringComparison.OrdinalIgnoreCase))
                 {
                     return columnIndex;

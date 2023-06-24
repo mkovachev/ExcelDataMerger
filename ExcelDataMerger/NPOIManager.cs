@@ -1,86 +1,181 @@
 ﻿using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
+using System.Text.RegularExpressions;
 
 public class NPOIManager
 {
-    public void GetNamesWithValues(string sourceFolderPath, string columnNames, string columnsValues)
+    public void UpdateColumns(string sourceFolderPath, string destinationFolderPath, string sourceNames, string sourceValues, string destinationNames, string destinationValues)
     {
-        DirectoryInfo directory = new DirectoryInfo(sourceFolderPath);
-        FileInfo[] files = directory.GetFiles("*.xlsx");
-
-        Dictionary<string, List<string>> names = new Dictionary<string, List<string>>();
-
-        foreach (FileInfo file in files)
+        try
         {
-            using (FileStream stream = new FileStream(file.FullName, FileMode.Open, FileAccess.Read))
-            {
-                IWorkbook workbook = new XSSFWorkbook(stream);
-                ISheet sheet = workbook.GetSheetAt(0);
+            var sourceData = GetSourceData(sourceFolderPath, sourceNames, sourceValues);
 
-                if (sheet != null)
+            var destinationDirectory = new DirectoryInfo(destinationFolderPath);
+            var destinationFiles = destinationDirectory.GetFiles("*.xlsx");
+
+            int totalUpdatedNames = 0;
+            int totalUpdatedFiles = 0;
+
+            foreach (var destinationFile in destinationFiles)
+            {
+                try
                 {
+                    if (destinationFile.Name.StartsWith("~$"))
+                        continue;
+
+                    using (var stream = new FileStream(destinationFile.FullName, FileMode.Open, FileAccess.ReadWrite))
+                    {
+                        var workbook = new XSSFWorkbook(stream);
+                        var sheet = workbook.GetSheetAt(0); // Assuming data is in the first sheet
+
+                        int rowCount = sheet.LastRowNum + 1;
+                        int namesColumnIndex = GetIndexByColumnName(sheet, destinationNames);
+                        int valueColumnIndex = GetIndexByColumnName(sheet, destinationValues);
+
+                        int updatedNamesCount = 0;
+
+                        for (int rowIndex = 1; rowIndex < rowCount; rowIndex++)
+                        {
+                            try
+                            {
+                                var row = sheet.GetRow(rowIndex);
+                                if (row != null)
+                                {
+                                    string name = GetCellValue(row.GetCell(namesColumnIndex));
+                                    string? shortName = Regex.Match(name, @"^(.*?)\s*\(")?.Groups[1]?.Value.Trim();
+
+                                    if (!string.IsNullOrEmpty(shortName) && sourceData.ContainsKey(shortName))
+                                    {
+                                        var values = sourceData[shortName];
+                                        string valuesString = string.Join(",", values);
+
+                                        var valueCell = row.GetCell(valueColumnIndex);
+                                        if (valueCell == null)
+                                            valueCell = row.CreateCell(valueColumnIndex, CellType.String);
+                                        valueCell.SetCellValue(valuesString);
+
+                                        Console.WriteLine($"Updated value for name '{name}': {valuesString}");
+                                        updatedNamesCount++;
+                                    }
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Error updating row {rowIndex + 1} in file '{destinationFile.Name}': {ex.Message}");
+                            }
+                        }
+
+                        if (updatedNamesCount > 0)
+                        {
+                            totalUpdatedNames += updatedNamesCount;
+                            totalUpdatedFiles++;
+                            Console.WriteLine($"Total updated names in file '{destinationFile.Name}': {updatedNamesCount}");
+                            Console.WriteLine();
+                        }
+
+                        using (var writeStream = new FileStream(destinationFile.FullName, FileMode.Create, FileAccess.Write))
+                        {
+                            workbook.Write(writeStream);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error processing file '{destinationFile.Name}': {ex.Message}");
+                }
+            }
+
+            Console.WriteLine("Update Columns Summary:");
+            Console.WriteLine($"Total updated names across all files: {totalUpdatedNames}");
+            Console.WriteLine($"Total files with updated names: {totalUpdatedFiles}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"An error occurred during the column update process: {ex.Message}");
+        }
+    }
+
+    private Dictionary<string, List<string>> GetSourceData(string sourceFolderPath, string sourceNames, string sourceValues)
+    {
+        var sourceDirectory = new DirectoryInfo(sourceFolderPath);
+        var sourceFiles = sourceDirectory.GetFiles("*.xlsx");
+
+        var names = new Dictionary<string, List<string>>(StringComparer.CurrentCultureIgnoreCase);
+
+        foreach (var file in sourceFiles)
+        {
+            try
+            {
+                if (file.Name.StartsWith("~$"))
+                    continue;
+
+                using (var stream = new FileStream(file.FullName, FileMode.Open, FileAccess.Read))
+                {
+                    var workbook = new XSSFWorkbook(stream);
+                    var sheet = workbook.GetSheetAt(0); // Assuming data is in the first sheet
+
                     int rowCount = sheet.LastRowNum + 1;
-                    int namesColumnIndex = GetIndexByColumnName(sheet.GetRow(0), columnNames);
-                    int valuesColumnIndex = GetIndexByColumnName(sheet.GetRow(0), columnsValues);
+                    int namesColumnIndex = GetIndexByColumnName(sheet, sourceNames);
+                    int valuesColumnIndex = GetIndexByColumnName(sheet, sourceValues);
 
                     for (int rowIndex = 1; rowIndex < rowCount; rowIndex++)
                     {
-                        IRow row = sheet.GetRow(rowIndex);
-
-                        if (row != null)
+                        try
                         {
-                            string name = GetCellValue(row.GetCell(namesColumnIndex));
-                            string value = GetCellValue(row.GetCell(valuesColumnIndex));
-
-                            if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(value))
+                            var row = sheet.GetRow(rowIndex);
+                            if (row != null)
                             {
-                                if (!names.ContainsKey(name))
-                                {
-                                    names.Add(name, new List<string>());
-                                }
+                                string name = GetCellValue(row.GetCell(namesColumnIndex));
+                                string value = GetCellValue(row.GetCell(valuesColumnIndex));
 
-                                names[name].Add(value);
+                                if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(value))
+                                {
+                                    if (!names.ContainsKey(name))
+                                        names.Add(name, new List<string>());
+
+                                    names[name].Add(value);
+                                }
                             }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error reading row {rowIndex + 1} in file '{file.Name}': {ex.Message}");
                         }
                     }
                 }
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error processing file '{file.Name}': {ex.Message}");
+            }
         }
 
-        foreach (var entry in names)
-        {
-            string name = entry.Key;
-            List<string> values = entry.Value;
-
-            string valuesString = string.Join(",", values);
-            Console.WriteLine($"{name}: {valuesString}");
-        }
+        return names;
     }
 
-    private int GetIndexByColumnName(IRow headerRow, string columnName)
+
+    private int GetIndexByColumnName(ISheet sheet, string columnName)
     {
-        var formattedColumnName = columnName.ToLower().Trim();
+        var formattedName = columnName.ToLower().Trim();
 
         int columnIndex = -1;
+        var headerRow = sheet.GetRow(0);
 
-        if (headerRow != null)
+        for (int column = 0; column < headerRow.LastCellNum; column++)
         {
-            for (int column = 0; column < headerRow.LastCellNum; column++)
-            {
-                string cellValue = GetCellValue(headerRow.GetCell(column))?.ToLower()?.Trim();
+            var cellValue = headerRow.GetCell(column)?.ToString()?.ToLower()?.Trim();
 
-                if (cellValue != null && cellValue.Replace("\n", " ").Equals(formattedColumnName, StringComparison.OrdinalIgnoreCase))
-                {
-                    columnIndex = column;
-                    break;
-                }
+            if (!string.IsNullOrEmpty(cellValue) && cellValue.Replace("\n", " ").Equals(formattedName, StringComparison.OrdinalIgnoreCase))
+            {
+                columnIndex = column;
+                break;
             }
         }
 
         return columnIndex;
     }
 
-    private string? GetCellValue(ICell cell)
+    private string GetCellValue(ICell cell)
     {
         if (cell != null)
         {
@@ -93,13 +188,12 @@ public class NPOIManager
                 case CellType.Boolean:
                     return cell.BooleanCellValue.ToString();
                 case CellType.Formula:
-                    // Handle formula cells if needed
                     return cell.CellFormula;
                 default:
-                    return null;
+                    return string.Empty;
             }
         }
 
-        return null;
+        return string.Empty;
     }
 }
