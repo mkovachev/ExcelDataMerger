@@ -15,6 +15,9 @@ public class Program
 
         // case Site assessment
         string destinationSiteAssessmentValues = "Site assessment: con / glo";
+        string sourceCon = "Con.";
+        string sourceGlo = "Glo.";
+
 
         // Check and add columns process
         var columnManager = new ColumnManager();
@@ -61,7 +64,7 @@ public class Program
         // Update Columns process
         var npoiManager = new NPOIManager();
         npoiManager.UpdateColumns(sourceFolderPath, destinationFolderPath, sourceNames, sourceValues, destinationSpecies, destinationTypeOfPresense);
-
+        npoiManager.UpdateSiteAssessmentColumn(sourceFolderPath, destinationFolderPath, sourceNames, sourceCon, sourceGlo, destinationSpecies, destinationSiteAssessmentValues);
         Console.WriteLine("Updating finished.");
     }
 }
