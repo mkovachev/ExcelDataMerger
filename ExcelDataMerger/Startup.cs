@@ -39,7 +39,9 @@ foreach (var destinationFile in destinationFiles)
         continue;
 
     columnManager.LoadExcelFile(destinationFile);
-    columnManager.CreateColumns(columns, destinationSpecies, destinationTypeOfPresence);
+    columnManager.CreateColumns(columns);
+    //columnManager.MergeCells(columns, destinationSpecies);
+    //columnManager.MergeCellsByNumber(columns, 3);
 
     var fileName = destinationFile.Name;
     columnManager.PrintFileSummary(fileName);

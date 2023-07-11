@@ -24,7 +24,7 @@ public class ColumnManager
         worksheet = package.Workbook.Worksheets.FirstOrDefault();
     }
 
-    public void CreateColumns(List<Column> columns, string destinationNames, string destinationColumn)
+    public void CreateColumns(List<Column> columns)
     {
         addedColumns = new List<string>();
         existingColumns = new List<string>();
@@ -43,10 +43,117 @@ public class ColumnManager
             }
         }
 
-        ///MergeCellsInNewColumns(destinationNames, destinationColumn);
+        package?.Save();
+    }
+
+    public void MergeCellsByNumber(List<Column> columns, int numberOfCells)
+    {
+        if (worksheet != null)
+        {
+            foreach (Column column in columns)
+            {
+                // Find the column index by name
+                var cell = worksheet.Cells["1:1"].FirstOrDefault(c => c.Value?.ToString() == column.Name);
+                if (cell != null)
+                {
+                    int columnIndex = cell.Start.Column;
+
+                    // Merge the cells in the specified range
+                    int startRow = 2; // Assuming data starts from the second row
+                    int endRow = startRow + numberOfCells - 1;
+
+                    ExcelRange range = worksheet.Cells[startRow, columnIndex, endRow, columnIndex];
+                    range.Merge = true;
+                }
+                else
+                {
+                    Console.WriteLine($"Column '{column.Name}' not found in the worksheet.");
+                }
+            }
+
+            // Save the changes to the Excel file
+            package?.Save();
+        }
+        else
+        {
+            Console.WriteLine("Excel file is not loaded. Please call LoadExcelFile method before merging cells.");
+        }
+    }
+
+    public void MergeCells(List<Column> columns, string destinationSpecies)
+    {
+        int speciesColumnIndex = GetColumnIndexByName(destinationSpecies);
+        int speciesCellCount = worksheet.Dimension.Rows - 1;
+
+        List<int> mergeStartIndexes = new List<int>();
+        List<int> mergeEndIndexes = new List<int>();
+
+        // Find consecutive cells with the same value in the destinationSpecies column
+        int startRowIndex = 2;
+        while (startRowIndex <= speciesCellCount + 1)
+        {
+            string currentSpecies = worksheet.Cells[startRowIndex, speciesColumnIndex].Text;
+            int cellLength = 1;
+            int nextRowIndex = startRowIndex + 1;
+
+            // Check if the next cells have the same value
+            while (nextRowIndex <= speciesCellCount + 1 && worksheet.Cells[nextRowIndex, speciesColumnIndex].Text == currentSpecies)
+            {
+                cellLength++;
+                nextRowIndex++;
+            }
+
+            if (cellLength > 1)
+            {
+                mergeStartIndexes.Add(startRowIndex);
+                mergeEndIndexes.Add(startRowIndex + cellLength - 1);
+            }
+
+            startRowIndex = nextRowIndex;
+        }
+
+        foreach (Column column in columns)
+        {
+            if (column.Name != destinationSpecies)
+            {
+                for (int i = 0; i < mergeStartIndexes.Count; i++)
+                {
+                    int startIndex = mergeStartIndexes[i];
+                    int endRowIndex = mergeEndIndexes[i];
+
+                    string startCellAddress = GetCellAddress(column.Index, startIndex);
+                    string endCellAddress = GetCellAddress(column.Index, endRowIndex);
+
+                    worksheet.Cells[startCellAddress + ":" + endCellAddress].Merge = true;
+                }
+            }
+        }
 
         package?.Save();
     }
+
+    private string GetCellAddress(int columnIndex, int rowIndex)
+    {
+        string columnName = GetColumnNameFromIndex(columnIndex);
+        return columnName + rowIndex.ToString();
+    }
+
+    private string GetColumnNameFromIndex(int columnIndex)
+    {
+        int dividend = columnIndex;
+        string columnName = string.Empty;
+
+        while (dividend > 0)
+        {
+            int modulo = (dividend - 1) % 26;
+            columnName = Convert.ToChar('A' + modulo) + columnName;
+            dividend = (dividend - modulo) / 26;
+        }
+
+        return columnName;
+    }
+
+
 
     private bool CreateColumn(Column column)
     {
